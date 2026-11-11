@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Donut SMP — Live Markets</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0e0e10;
+  --surface: #18181c;
+  --surface-2: #222228;
+  --border: rgba(255,255,255,0.08);
+  --border-hover: rgba(255,255,255,0.18);
+  --text: #f0f0ee;
+  --text-muted: #888884;
+  --text-dim: #555553;
+  --accent: #7c5cfc;
+  --accent-soft: rgba(124,92,252,0.15);
+  --up: #3ecf8e;
+  --down: #f56565;
+  --up-soft: rgba(62,207,142,0.12);
+  --down-soft: rgba(245,101,101,0.12);
+  --radius: 10px;
+  --font: 'Inter', system-ui, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f4f4f2;
+    --surface: #ffffff;
+    --surface-2: #f0f0ee;
+    --border: rgba(0,0,0,0.08);
+    --border-hover: rgba(0,0,0,0.18);
+    --text: #111110;
+    --text-muted: #666662;
+    --text-dim: #aaa;
+    --accent-soft: rgba(124,92,252,0.08);
+    --up-soft: rgba(62,207,142,0.08);
+    --down-soft: rgba(245,101,101,0.08);
+  }
+}
+[data-mode="dark"] { --bg:#0e0e10;--surface:#18181c;--surface-2:#222228;--border:rgba(255,255,255,0.08);--border-hover:rgba(255,255,255,0.18);--text:#f0f0ee;--text-muted:#888884;--text-dim:#555553;--up-soft:rgba(62,207,142,0.12);--down-soft:rgba(245,101,101,0.12);--accent-soft:rgba(124,92,252,0.15); }
+[data-mode="light"] { --bg:#f4f4f2;--surface:#ffffff;--surface-2:#f0f0ee;--border:rgba(0,0,0,0.08);--border-hover:rgba(0,0,0,0.18);--text:#111110;--text-muted:#666662;--text-dim:#aaa;--up-soft:rgba(62,207,142,0.08);--down-soft:rgba(245,101,101,0.08);--accent-soft:rgba(124,92,252,0.08); }
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5; }
+body { padding: env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px); }
+
+.shell { max-width: 920px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; }
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-mark { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.logo-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.logo-sub { font-size: 12px; color: var(--text-muted); letter-spacing: 0.04em; }
+.live-pill { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px; background: var(--up-soft); color: var(--up); font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--up); animation: pulse 1.8s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+.search-row { display: flex; gap: 10px; margin-bottom: 1.25rem; }
+.search-wrap { flex: 1; position: relative; }
+.search-wrap input { width: 100%; padding: 0.6rem 0.9rem 0.6rem 2.5rem; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 14px; color: var(--text); outline: none; transition: border-color 0.15s; }
+.search-wrap input:focus { border-color: var(--accent); }
+.search-wrap input::placeholder { color: var(--text-dim); }
+.search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-dim); font-size: 15px; pointer-events: none; }
+.sort-btn { padding: 0.6rem 1rem; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); font-size: 13px; color: var(--text-muted); cursor: pointer; transition: border-color 0.15s, color 0.15s; white-space: nowrap; }
+.sort-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.sort-btn.active { border-color: var(--accent); color: var(--accent); }
+
+.categories { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.cat-btn { padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; cursor: pointer; border: 0.5px solid var(--border); background: var(--surface); color: var(--text-muted); transition: all 0.15s; }
+.cat-btn:hover { border-color: var(--border-hover); color: var(--text); }
+.cat-btn.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.item-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: 12px; padding: 1rem; cursor: pointer; transition: border-color 0.15s, background 0.1s; position: relative; overflow: hidden; }
+.item-card:hover { border-color: var(--border-hover); }
+.item-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+.item-emoji { font-size: 26px; margin-bottom: 8px; display: block; }
+.item-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.item-cat { font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
+.item-price { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.item-delta { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px; margin-top: 4px; }
+.item-delta.up { background: var(--up-soft); color: var(--up); }
+.item-delta.down { background: var(--down-soft); color: var(--down); }
+.sparkline { margin-top: 8px; height: 32px; }
+
+.detail { background: var(--surface); border: 0.5px solid var(--border); border-radius: 14px; padding: 1.5rem; margin-bottom: 1.5rem; display: none; }
+.detail.visible { display: block; }
+.detail-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+.detail-info { display: flex; align-items: center; gap: 14px; }
+.detail-emoji { font-size: 40px; }
+.detail-name { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.detail-cat-badge { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.detail-price-block { text-align: right; }
+.detail-price { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; }
+.detail-delta { font-size: 14px; font-weight: 600; }
+.detail-delta.up { color: var(--up); }
+.detail-delta.down { color: var(--down); }
+
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+.stat-card { background: var(--surface-2); border-radius: var(--radius); padding: 0.75rem 1rem; }
+.stat-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; letter-spacing: 0.03em; }
+.stat-value { font-size: 16px; font-weight: 700; }
+
+.range-tabs { display: flex; gap: 4px; margin-bottom: 1rem; }
+.range-tab { padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; background: transparent; color: var(--text-dim); transition: all 0.1s; }
+.range-tab:hover { color: var(--text); }
+.range-tab.active { background: var(--accent-soft); color: var(--accent); }
+
+.chart-wrap { position: relative; height: 220px; }
+
+.empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-dim); font-size: 14px; }
+.empty-emoji { font-size: 36px; margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">Donut SMP Live Markets — prix en temps réel de tous les items du serveur</h2>
+
+<div class="shell">
+  <header>
+    <div class="logo">
+      <div class="logo-mark">🍩</div>
+      <div>
+        <div class="logo-name">Donut SMP</div>
+        <div class="logo-sub">LIVE MARKETS</div>
+      </div>
+    </div>
+    <div class="live-pill"><span class="live-dot"></span>En direct</div>
+  </header>
+
+  <div id="detail" class="detail">
+    <div class="detail-top">
+      <div class="detail-info">
+        <span class="detail-emoji" id="d-emoji"></span>
+        <div>
+          <div class="detail-name" id="d-name"></div>
+          <div class="detail-cat-badge" id="d-cat"></div>
+        </div>
+      </div>
+      <div class="detail-price-block">
+        <div class="detail-price" id="d-price"></div>
+        <div class="detail-delta" id="d-delta"></div>
+      </div>
+    </div>
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-label">24h haut</div><div class="stat-value" id="d-high"></div></div>
+      <div class="stat-card"><div class="stat-label">24h bas</div><div class="stat-value" id="d-low"></div></div>
+      <div class="stat-card"><div class="stat-label">Volume</div><div class="stat-value" id="d-vol"></div></div>
+      <div class="stat-card"><div class="stat-label">Transactions</div><div class="stat-value" id="d-tx"></div></div>
+    </div>
+    <div class="range-tabs">
+      <button class="range-tab active" onclick="setRange(this,'1h')">1h</button>
+      <button class="range-tab" onclick="setRange(this,'6h')">6h</button>
+      <button class="range-tab" onclick="setRange(this,'24h')">24h</button>
+      <button class="range-tab" onclick="setRange(this,'7d')">7j</button>
+      <button class="range-tab" onclick="setRange(this,'30d')">30j</button>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="mainChart" role="img" aria-label="Courbe de prix de l'item sélectionné">Données de prix</canvas>
+    </div>
+  </div>
+
+  <div class="search-row">
+    <div class="search-wrap">
+      <span class="search-icon">🔍</span>
+      <input type="search" id="searchInput" placeholder="Rechercher un item…" oninput="filterItems()">
+    </div>
+    <button class="sort-btn" id="sortPriceBtn" onclick="toggleSort('price')">Prix ↕</button>
+    <button class="sort-btn" id="sortDeltaBtn" onclick="toggleSort('delta')">Variation ↕</button>
+  </div>
+
+  <div class="categories" id="catBar"></div>
+
+  <div class="grid" id="itemGrid"></div>
+  <div class="empty-state" id="emptyState" style="display:none"><div class="empty-emoji">📦</div>Aucun item trouvé.</div>
+</div>
+
+<script>
+const ITEMS = [
+  { id:'diamond', name:'Diamant', emoji:'💎', cat:'Minerais', base:420, vol:1240, tx:88 },
+  { id:'emerald', name:'Émeraude', emoji:'🟩', cat:'Minerais', base:310, vol:980, tx:65 },
+  { id:'gold_ingot', name:'Lingot d\'or', emoji:'🏅', cat:'Minerais', base:85, vol:3200, tx:210 },
+  { id:'iron_ingot', name:'Lingot de fer', emoji:'⚙️', cat:'Minerais', base:12, vol:8900, tx:540 },
+  { id:'netherite', name:'Netherite', emoji:'🖤', cat:'Minerais', base:1800, vol:140, tx:12 },
+  { id:'coal', name:'Charbon', emoji:'🪨', cat:'Minerais', base:3, vol:22000, tx:1200 },
+  { id:'lapis', name:'Lapis', emoji:'🔵', cat:'Minerais', base:18, vol:4100, tx:290 },
+  { id:'redstone', name:'Redstone', emoji:'🔴', cat:'Minerais', base:8, vol:9800, tx:650 },
+  { id:'wheat', name:'Blé', emoji:'🌾', cat:'Agriculture', base:2, vol:45000, tx:2800 },
+  { id:'carrot', name:'Carotte', emoji:'🥕', cat:'Agriculture', base:1, vol:38000, tx:2100 },
+  { id:'potato', name:'Pomme de terre', emoji:'🥔', cat:'Agriculture', base:1, vol:35000, tx:1900 },
+  { id:'beetroot', name:'Betterave', emoji:'🫚', cat:'Agriculture', base:3, vol:12000, tx:700 },
+  { id:'melon', name:'Melon', emoji:'🍈', cat:'Agriculture', base:5, vol:18000, tx:950 },
+  { id:'sugar_cane', name:'Canne à sucre', emoji:'🌿', cat:'Agriculture', base:2, vol:30000, tx:1800 },
+  { id:'oak_log', name:'Bûche de chêne', emoji:'🪵', cat:'Bois', base:4, vol:28000, tx:1600 },
+  { id:'spruce_log', name:'Bûche d\'épicéa', emoji:'🌲', cat:'Bois', base:4, vol:22000, tx:1300 },
+  { id:'bamboo', name:'Bambou', emoji:'🎋', cat:'Bois', base:1, vol:52000, tx:3100 },
+  { id:'obsidian', name:'Obsidienne', emoji:'🟣', cat:'Blocs', base:28, vol:5600, tx:380 },
+  { id:'sand', name:'Sable', emoji:'🏖️', cat:'Blocs', base:1, vol:65000, tx:4200 },
+  { id:'gravel', name:'Gravier', emoji:'🪨', cat:'Blocs', base:1, vol:50000, tx:3300 },
+  { id:'stone', name:'Pierre', emoji:'🧱', cat:'Blocs', base:1, vol:80000, tx:5100 },
+  { id:'enchanted_book', name:'Livre enchanté', emoji:'📗', cat:'Magie', base:650, vol:280, tx:24 },
+  { id:'xp_bottle', name:'Flacon d\'XP', emoji:'🧪', cat:'Magie', base:45, vol:4200, tx:280 },
+  { id:'blaze_rod', name:'Bâton de Blaze', emoji:'🔥', cat:'Magie', base:95, vol:1800, tx:120 },
+  { id:'ender_pearl', name:'Perle de l\'Ender', emoji:'🫧', cat:'Magie', base:55, vol:2800, tx:190 },
+  { id:'eye_of_ender', name:'Œil de l\'Ender', emoji:'👁️', cat:'Magie', base:220, vol:650, tx:45 },
+  { id:'cooked_beef', name:'Bœuf cuit', emoji:'🥩', cat:'Nourriture', base:6, vol:15000, tx:900 },
+  { id:'bread', name:'Pain', emoji:'🍞', cat:'Nourriture', base:3, vol:22000, tx:1400 },
+  { id:'golden_apple', name:'Pomme dorée', emoji:'🍏', cat:'Nourriture', base:380, vol:420, tx:32 },
+  { id:'chorus_fruit', name:'Fruit de Chorus', emoji:'🫐', cat:'Nourriture', base:35, vol:3200, tx:220 },
+  { id:'diamond_sword', name:'Épée en diamant', emoji:'⚔️', cat:'Équipement', base:1200, vol:85, tx:8 },
+  { id:'diamond_pickaxe', name:'Pioche en diamant', emoji:'⛏️', cat:'Équipement', base:980, vol:110, tx:10 },
+  { id:'elytra', name:'Élytre', emoji:'🦋', cat:'Équipement', base:8500, vol:22, tx:3 },
+  { id:'totem', name:'Totem', emoji:'🪆', cat:'Équipement', base:2200, vol:65, tx:6 },
+];
+
+function genHistory(base, points, volatility = 0.08) {
+  let price = base * (0.85 + Math.random() * 0.3);
+  const history = [];
+  for (let i = 0; i < points; i++) {
+    price = Math.max(0.5, price * (1 + (Math.random() - 0.48) * volatility));
+    history.push(Math.round(price * 100) / 100);
+  }
+  history.push(base);
+  return history;
+}
+
+function getHistoryForRange(item, range) {
+  const configs = {
+    '1h': { points: 60, vol: 0.03, label: 'dernière heure' },
+    '6h': { points: 72, vol: 0.05, label: '6 dernières heures' },
+    '24h': { points: 96, vol: 0.07, label: '24 dernières heures' },
+    '7d': { points: 168, vol: 0.09, label: '7 derniers jours' },
+    '30d': { points: 180, vol: 0.12, label: '30 derniers jours' },
+  };
+  const cfg = configs[range] || configs['24h'];
+  const seed = item.id + range;
+  let s = 0; for (let c of seed) s = (s * 31 + c.charCodeAt(0)) % 100000;
+  const rng = () => { s = (s * 1664525 + 1013904223) % 2147483648; return s / 2147483648; };
+  let price = item.base * (0.8 + rng() * 0.4);
+  const history = [];
+  for (let i = 0; i < cfg.points; i++) {
+    price = Math.max(0.5, price * (1 + (rng() - 0.48) * cfg.vol));
+    history.push(Math.round(price * 100) / 100);
+  }
+  history.push(item.base);
+  return history;
+}
+
+const marketData = {};
+ITEMS.forEach(item => {
+  const h24 = genHistory(item.base, 96, 0.07);
+  const last = h24[h24.length - 1];
+  const prev = h24[0];
+  const delta = ((last - prev) / prev * 100);
+  const high = Math.max(...h24);
+  const low = Math.min(...h24);
+  marketData[item.id] = { price: last, delta, high, low, h24 };
+});
+
+const categories = ['Tout', ...new Set(ITEMS.map(i => i.cat))];
+let activeCategory = 'Tout';
+let searchQuery = '';
+let sortMode = null;
+let sortDir = 1;
+let selectedItem = null;
+let mainChart = null;
+let activeRange = '24h';
+let liveInterval = null;
+
+function fmt(n) {
+  if (n >= 1000) return (n/1000).toFixed(1) + 'k';
+  return Number.isInteger(n) ? n.toString() : n.toFixed(1);
+}
+function fmtPrice(n) {
+  if (n >= 1000) return Math.round(n).toLocaleString('fr-FR');
+  return n < 10 ? n.toFixed(1) : Math.round(n).toString();
+}
+
+function buildCats() {
+  const bar = document.getElementById('catBar');
+  bar.innerHTML = categories.map(c =>
+    `<button class="cat-btn${c===activeCategory?' active':''}" onclick="setCategory('${c}')">${c}</button>`
+  ).join('');
+}
+
+function setCategory(cat) {
+  activeCategory = cat;
+  buildCats();
+  renderGrid();
+}
+
+function toggleSort(mode) {
+  if (sortMode === mode) sortDir *= -1;
+  else { sortMode = mode; sortDir = -1; }
+  document.getElementById('sortPriceBtn').classList.toggle('active', sortMode==='price');
+  document.getElementById('sortDeltaBtn').classList.toggle('active', sortMode==='delta');
+  renderGrid();
+}
+
+function filterItems() {
+  searchQuery = document.getElementById('searchInput').value.toLowerCase();
+  renderGrid();
+}
+
+function getFilteredItems() {
+  let items = ITEMS.filter(item => {
+    if (activeCategory !== 'Tout' && item.cat !== activeCategory) return false;
+    if (searchQuery && !item.name.toLowerCase().includes(searchQuery) && !item.cat.toLowerCase().includes(searchQuery)) return false;
+    return true;
+  });
+  if (sortMode === 'price') items.sort((a,b) => sortDir * (marketData[b.id].price - marketData[a.id].price));
+  if (sortMode === 'delta') items.sort((a,b) => sortDir * (marketData[b.id].delta - marketData[a.id].delta));
+  return items;
+}
+
+function sparklineSVG(data, up) {
+  const w = 150, h = 32;
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length-1)) * w;
+    const y = h - ((v - min) / range) * (h - 4) - 2;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const color = up ? '#3ecf8e' : '#f56565';
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+function renderGrid() {
+  const items = getFilteredItems();
+  const grid = document.getElementById('itemGrid');
+  const empty = document.getElementById('emptyState');
+  if (items.length === 0) { grid.innerHTML = ''; empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  grid.innerHTML = items.map(item => {
+    const d = marketData[item.id];
+    const up = d.delta >= 0;
+    const spark = d.h24.slice(-24);
+    return `<div class="item-card${selectedItem===item.id?' selected':''}" onclick="selectItem('${item.id}')">
+      <span class="item-emoji">${item.emoji}</span>
+      <div class="item-name">${item.name}</div>
+      <div class="item-cat">${item.cat}</div>
+      <div class="item-price">${fmtPrice(d.price)} <span style="font-size:11px;color:var(--text-dim);font-weight:400">$</span></div>
+      <div class="item-delta ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(d.delta).toFixed(1)}%</div>
+      <div class="sparkline">${sparklineSVG(spark, up)}</div>
+    </div>`;
+  }).join('');
+}
+
+function selectItem(id) {
+  selectedItem = id;
+  renderGrid();
+  const item = ITEMS.find(i => i.id === id);
+  const d = marketData[id];
+  const up = d.delta >= 0;
+  document.getElementById('d-emoji').textContent = item.emoji;
+  document.getElementById('d-name').textContent = item.name;
+  document.getElementById('d-cat').textContent = item.cat;
+  document.getElementById('d-price').textContent = fmtPrice(d.price) + ' $';
+  const deltaEl = document.getElementById('d-delta');
+  deltaEl.textContent = `${up?'▲':'▼'} ${Math.abs(d.delta).toFixed(2)}% sur 24h`;
+  deltaEl.className = 'detail-delta ' + (up?'up':'down');
+  document.getElementById('d-high').textContent = fmtPrice(d.high) + ' $';
+  document.getElementById('d-low').textContent = fmtPrice(d.low) + ' $';
+  document.getElementById('d-vol').textContent = fmt(item.vol);
+  document.getElementById('d-tx').textContent = fmt(item.tx);
+  document.getElementById('detail').classList.add('visible');
+  document.getElementById('detail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  renderMainChart(id, activeRange);
+}
+
+function setRange(btn, range) {
+  activeRange = range;
+  document.querySelectorAll('.range-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (selectedItem) renderMainChart(selectedItem, range);
+}
+
+function renderMainChart(id, range) {
+  const item = ITEMS.find(i => i.id === id);
+  const history = getHistoryForRange(item, range);
+  const up = history[history.length-1] >= history[0];
+  const color = up ? '#3ecf8e' : '#f56565';
+  const colorAlpha = up ? 'rgba(62,207,142,0.1)' : 'rgba(245,101,101,0.1)';
+
+  const labels = history.map((_,i) => {
+    if (range === '1h') return i % 10 === 0 ? `-${60-i}m` : '';
+    if (range === '6h') return i % 12 === 0 ? `-${Math.round((history.length-1-i)/12)}h` : '';
+    if (range === '24h') return i % 16 === 0 ? `-${Math.round((history.length-1-i)*0.25)}h` : '';
+    if (range === '7d') return i % 24 === 0 ? `j-${Math.round((history.length-1-i)/24)}` : '';
+    if (range === '30d') return i % 30 === 0 ? `j-${Math.round((history.length-1-i)/6)}` : '';
+    return '';
+  });
+
+  if (mainChart) { mainChart.destroy(); mainChart = null; }
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  mainChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: item.name,
+        data: history,
+        borderColor: color,
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        pointHoverBackgroundColor: color,
+        fill: true,
+        backgroundColor: (context) => {
+          const chart = context.chart;
+          const { ctx: c, chartArea } = chart;
+          if (!chartArea) return colorAlpha;
+          const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+          gradient.addColorStop(0, up ? 'rgba(62,207,142,0.18)' : 'rgba(245,101,101,0.18)');
+          gradient.addColorStop(1, 'rgba(0,0,0,0)');
+          return gradient;
+        },
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#18181c',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 0.5,
+          titleColor: '#888884',
+          bodyColor: '#f0f0ee',
+          bodyFont: { size: 14, weight: '700' },
+          titleFont: { size: 11 },
+          padding: 10,
+          callbacks: {
+            label: ctx => ' ' + fmtPrice(ctx.parsed.y) + ' $'
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          border: { display: false },
+          ticks: { color: '#555553', font: { size: 11 }, maxTicksLimit: 8 }
+        },
+        y: {
+          position: 'right',
+          grid: { color: 'rgba(255,255,255,0.05)', drawBorder: false },
+          border: { display: false, dash: [4, 4] },
+          ticks: {
+            color: '#555553',
+            font: { size: 11 },
+            callback: v => fmtPrice(v) + ' $',
+            maxTicksLimit: 6
+          }
+        }
+      }
+    }
+  });
+}
+
+function tickMarket() {
+  ITEMS.forEach(item => {
+    const d = marketData[item.id];
+    const change = (Math.random() - 0.49) * 0.012;
+    const newPrice = Math.max(0.5, d.price * (1 + change));
+    d.h24.push(Math.round(newPrice * 100) / 100);
+    if (d.h24.length > 200) d.h24.shift();
+    const prev = d.h24[0];
+    d.price = newPrice;
+    d.delta = (newPrice - prev) / prev * 100;
+    d.high = Math.max(d.high, newPrice);
+    d.low = Math.min(d.low, newPrice);
+    marketData[item.id] = d;
+  });
+
+  if (selectedItem) {
+    const d = marketData[selectedItem];
+    const item = ITEMS.find(i => i.id === selectedItem);
+    const up = d.delta >= 0;
+    document.getElementById('d-price').textContent = fmtPrice(d.price) + ' $';
+    const deltaEl = document.getElementById('d-delta');
+    deltaEl.textContent = `${up?'▲':'▼'} ${Math.abs(d.delta).toFixed(2)}% sur 24h`;
+    deltaEl.className = 'detail-delta ' + (up?'up':'down');
+    document.getElementById('d-high').textContent = fmtPrice(d.high) + ' $';
+    document.getElementById('d-low').textContent = fmtPrice(d.low) + ' $';
+    if (mainChart && activeRange === '1h') {
+      const h = getHistoryForRange(item, '1h');
+      h[h.length-1] = d.price;
+      mainChart.data.datasets[0].data = h;
+      mainChart.update('none');
+    }
+  }
+  renderGrid();
+}
+
+buildCats();
+renderGrid();
+liveInterval = setInterval(tickMarket, 3000);
+</script>
+</body>
+</html>
